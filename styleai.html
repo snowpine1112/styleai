@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>StyleAI — ファッションコーディネーター</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #F2EDE8;
+      font-family: -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #root {
+      max-width: 430px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: #F2EDE8;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .screen { padding-bottom: 120px; min-height: 100vh; }
+
+    /* Chips */
+    .chip {
+      cursor: pointer;
+      padding: 9px 16px;
+      border-radius: 22px;
+      border: 1.5px solid #D8CFC6;
+      background: white;
+      font-size: 13px;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+      color: #3A3A3A;
+      line-height: 1;
+    }
+    .chip:hover { border-color: #B0A090; }
+    .chip.selected { background: #1C1C1C; color: white; border-color: #1C1C1C; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    /* Buttons */
+    .btn-primary {
+      background: #1C1C1C;
+      color: white;
+      border: none;
+      padding: 17px 20px;
+      width: 100%;
+      border-radius: 14px;
+      font-size: 15px;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      transition: background 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary:hover { background: #3A3A3A; }
+    .btn-primary:disabled { opacity: 0.38; cursor: default; }
+
+    /* Labels */
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #A09080;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 430px;
+      background: white;
+      border-top: 1px solid #EAE4DE;
+      display: flex;
+      z-index: 100;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0 8px;
+      cursor: pointer;
+      font-size: 10px;
+      color: #B8B0A8;
+      gap: 3px;
+      transition: color 0.15s;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+    .nav-item.active { color: #1C1C1C; }
+    .nav-icon { font-size: 20px; }
+
+    /* Scroll buttons */
+    .scroll-btn-wrap {
+      position: fixed;
+      right: calc(50% - 230px);
+      bottom: 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 150;
+    }
+    @media (max-width: 460px) {
+      .scroll-btn-wrap { right: 12px; }
+    }
+    .scroll-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
+      background: rgba(28,28,28,0.75);
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+      transition: background 0.15s, opacity 0.2s;
+    }
+    .scroll-btn:hover { background: rgba(28,28,28,0.92); }
+
+    /* Chat */
+    .chat-bubble {
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    /* Animations */
+    .fade-in { animation: fadeIn 0.28s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-up { animation: slideUp 0.32s cubic-bezier(0.32, 0.72, 0, 1); }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    /* Wardrobe grid */
+    .wardrobe-item {
+      background: white;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { display: none; }
+    input, textarea, button { font-family: inherit; }
+    textarea { resize: none; }
+
+    /* Category tab active */
+    .cat-tab {
+      flex-shrink: 0;
+      padding: 14px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+      border-bottom: 2.5px solid transparent;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .cat-tab.active { color: #1C1C1C; border-bottom-color: #1C1C1C; font-weight: 700; }
+    .cat-tab:not(.active) { color: #AAA; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+/* ─── DATA ─── */
+
+const OCCASIONS = ['デート 💕','仕事 💼','カジュアル 👟','フォーマル 🥂','お出かけ 🌸','スポーツ ⚡'];
+const MOODS     = ['元気いっぱい ✨','落ち着いた 🌿','おしゃれしたい 💎','シンプルに 🤍','個性的に 🎨'];
+const WEATHERS  = ['晴れ ☀️','曇り ☁️','雨 🌧️','寒い 🧥','暑い 🌡️'];
+const COMPANIONS= ['一人で 🚶','友達と 👯','パートナーと 💑','家族と 👨‍👩‍👧','同僚と 🤝'];
+const CATEGORIES= ['すべて','トップス','ボトムス','アウター','シューズ','バッグ'];
+
+const CAT_EMOJI = { 'トップス':'👕','ボトムス':'👖','アウター':'🧥','シューズ':'👞','バッグ':'👜','アクセサリー':'💍' };
+const COLORS    = ['#F0E6D3','#D8E8F0','#E8F0D8','#F0D8E8','#E8E8F0','#F0ECD8','#E0F0E8','#F0E0D0'];
+
+const DEMO_WARDROBE = [
+  { id:1, name:'白シャツ',       category:'トップス', emoji:'👕', color:'#F5F2EE', note:'きれいめ' },
+  { id:2, name:'デニムパンツ',   category:'ボトムス', emoji:'👖', color:'#D8E4F0', note:'ストレート' },
+  { id:3, name:'ベージュコート', category:'アウター', emoji:'🧥', color:'#EDE0CC', note:'チェスターコート' },
+  { id:4, name:'ブラウンローファー', category:'シューズ', emoji:'👞', color:'#D8C4B0', note:'本革' },
+  { id:5, name:'フレアスカート', category:'ボトムス', emoji:'👗', color:'#F0E8D8', note:'ミディ丈' },
+  { id:6, name:'ボーダートップ', category:'トップス', emoji:'👚', color:'#E8EEF5', note:'ネイビー×白' },
+];
+
+const SUGGESTIONS = {
+  'デート 💕': {
+    theme:'ロマンティック・フェミニン', icon:'🌸',
+    overview:'大切なデートのために、女性らしく上品なコーディネートを提案します。やわらかなシルエットと温かみのある色合いで、自然な魅力を引き出しましょう。',
+    items:[
+      { label:'フローラルワンピース', desc:'ミディ丈のやわらかなシルエット — フェミニンさを演出', wrd:false },
+      { label:'薄手カーディガン',     desc:'ベージュやアイボリーで羽織る — さりげなく上品に',  wrd:false },
+      { label:'ストラップサンダル',   desc:'ヌードカラーで脚長効果 — 華奢な印象に',            wrd:false },
+      { label:'ミニクロスボディバッグ',desc:'小ぶりでエレガント — コーデを引き締める',           wrd:false },
+    ],
+    tip:'香水は控えめに。ナチュラルメイクとふんわりヘアがこのコーデに最も合います。',
+    gradients:['linear-gradient(135deg,#F9E4EC,#E8BECE)','linear-gradient(135deg,#FAF0E8,#EDD5C0)','linear-gradient(135deg,#F5EAF5,#DCBFDC)','linear-gradient(135deg,#FFF0E8,#FFD8C0)'],
+  },
+  '仕事 💼': {
+    theme:'スマート・プロフェッショナル', icon:'💼',
+    overview:'オフィスで信頼感と清潔感を与えるコーディネートです。シンプルで品のあるアイテムを組み合わせて、仕事ができる印象を作りましょう。',
+    items:[
+      { label:'白シャツ',           desc:'清潔感の基本 — きれいめに着こなす',       wrd:true  },
+      { label:'ネイビーテーパードパンツ', desc:'すっきりとした印象を作るシルエット', wrd:false },
+      { label:'ブラックパンプス',   desc:'足元を引き締めてプロフェッショナルに',    wrd:false },
+      { label:'レザートートバッグ', desc:'A4サイズ対応 — 実用的で上品',             wrd:false },
+    ],
+    tip:'アクセサリーはシンプルに。小さなパールイヤリングがおすすめ。スーツ不要のオフィスならジャケットをプラスして格上げを。',
+    gradients:['linear-gradient(135deg,#E8EEF8,#C0CCE8)','linear-gradient(135deg,#F0F4F8,#D0DCE8)','linear-gradient(135deg,#E8F0F8,#C8D8E8)','linear-gradient(135deg,#EEF2F8,#D0D8E8)'],
+  },
+  'カジュアル 👟': {
+    theme:'ナチュラル・リラックス', icon:'🌿',
+    overview:'肩の力を抜いた、着心地の良いカジュアルコーデです。手持ちのベーシックアイテムを上手に組み合わせて、今日らしいスタイリングを楽しみましょう。',
+    items:[
+      { label:'デニムパンツ',   desc:'ストレートシルエット — カジュアルの王道',      wrd:true },
+      { label:'ボーダートップ', desc:'さわやかな定番 — コーデに動きを添える',        wrd:true },
+      { label:'ホワイトスニーカー', desc:'清潔感とこなれ感を同時に',                 wrd:false },
+      { label:'キャンバストート', desc:'軽くてカジュアル — 荷物も多めに入る',        wrd:false },
+    ],
+    tip:'デニムの色味に合わせて小物の色をまとめるとすっきり見えます。スニーカーを白にすると全体が明るくなります。',
+    gradients:['linear-gradient(135deg,#E4F0E8,#BCDACC)','linear-gradient(135deg,#F0F4E8,#D8E8C0)','linear-gradient(135deg,#E8F4EC,#C0D8C8)','linear-gradient(135deg,#ECF4E8,#CCDC B8)'],
+  },
+  'フォーマル 🥂': {
+    theme:'エレガント・フォーマル', icon:'✨',
+    overview:'特別な場所に相応しい、品格のあるフォーマルスタイルです。洗練されたシルエットで、どんなシーンでも自信を持って臨めるコーデを提案します。',
+    items:[
+      { label:'ミディ丈ドレス',    desc:'シックなカラーで上品さを演出',             wrd:false },
+      { label:'テーラードジャケット', desc:'きちんと感を追加 — 脱いでもサマになる', wrd:false },
+      { label:'ポインテッドパンプス', desc:'足元を格上げ — スタイルを引き伸ばす',   wrd:false },
+      { label:'サテンクラッチバッグ', desc:'夜の席にぴったりの光沢感',               wrd:false },
+    ],
+    tip:'アクセサリーはワンポイントに絞って。ネックレスかイヤリング、どちらかを選ぶとバランス良くまとまります。',
+    gradients:['linear-gradient(135deg,#F0EAF8,#D0C0E8)','linear-gradient(135deg,#EEE8F8,#CAB8E8)','linear-gradient(135deg,#F4EEF8,#DCC8EC)','linear-gradient(135deg,#F0ECF8,#D4C4E8)'],
+  },
+  'お出かけ 🌸': {
+    theme:'おしゃれ・ルーズシック', icon:'🌸',
+    overview:'お出かけに最適な、トレンド感のあるルーズシックスタイルです。こなれた雰囲気と動きやすさを両立させて、一日中楽しめるコーデを目指します。',
+    items:[
+      { label:'オーバーサイズシャツ', desc:'ゆったり着てこなれ感を出す',              wrd:false },
+      { label:'フレアスカート',       desc:'ミディ丈で女性らしさをプラス',            wrd:true  },
+      { label:'ローファー',          desc:'コーデをきれいめに引き締める',             wrd:false },
+      { label:'バスケットバッグ',    desc:'季節感と抜け感を演出',                    wrd:false },
+    ],
+    tip:'シャツをスカートにインしてウエストを強調すると、バランスよくまとまります。',
+    gradients:['linear-gradient(135deg,#FFF0E8,#FFDAC0)','linear-gradient(135deg,#FFF4E8,#FFE0C8)','linear-gradient(135deg,#FFF8EC,#FFE8CC)','linear-gradient(135deg,#FFF4F0,#FFD8C8)'],
+  },
+};
+
+const DEFAULT_SUGGESTION = SUGGESTIONS['カジュアル 👟'];
+
+const getSuggestion = (formData) => {
+  const occ = formData && formData.occasion;
+  return SUGGESTIONS[occ] || DEFAULT_SUGGESTION;
+};
+
+const AI_RESPONSES = [
+  { kw:'カジュアル', res:'もっとカジュアルにアレンジしますね！デニムパンツをベースに、オーバーサイズのTシャツとスニーカーでリラックス感を出しましょう。バッグをキャンバストートに変えると◎' },
+  { kw:'色',        res:'色を変えてみましょう！今のベースはニュートラルカラーですが、トップスをテラコッタや深緑など旬のカラーにするとぐっと今っぽくなります。どんな色がお好みですか？' },
+  { kw:'別',        res:'別のスタイルをご提案します！モノトーンでまとめた、シャープでクールなコーデはいかがでしょう。ブラックパンツ×ホワイトトップ×グレーアウターで統一感を出します。' },
+  { kw:'シンプル',  res:'シンプルにまとめますね。ベーシックカラー3色以内、アイテムは少なく。白シャツ＋ベージュパンツ＋ブラウンローファーの組み合わせがおすすめです。' },
+  { kw:'暖か',      res:'暖かみのあるコーデに変えますね。テラコッタやキャメル、バーガンディなどのアースカラーを取り入れると、季節感もありぐっと暖かい印象になります。' },
+  { kw:'アウター',  res:'アウターをアップデートしましょう！今の季節ならチェスターコートが旬。ベージュかグレーを選べば、どんなインナーにも合わせやすいです。' },
+];
+
+const getAIResponse = (input) => {
+  for (const r of AI_RESPONSES) {
+    if (input.includes(r.kw)) return r.res;
+  }
+  return `なるほど！ご要望を踏まえてコーデを調整しました。全体のバランスを見直しながら、より「${input}」な雰囲気に仕上げています。いかがでしょうか？他にご要望があればお気軽にどうぞ。`;
+};
+
+/* ─── COMPONENTS ─── */
+
+function Chip({ label, selected, onClick }) {
+  return (
+    <button className={`chip${selected ? ' selected' : ''}`} onClick={onClick}>
+      {label}
+    </button>
+  );
+}
+
+/* HOME SCREEN */
+function HomeScreen({ onSubmit }) {
+  const [form, setForm] = useState({ occasion:'', mood:'', weather:'', companion:'', note:'' });
+  const toggle = (f, v) => setForm(p => ({ ...p, [f]: p[f] === v ? '' : v }));
+  const canSubmit = !!(form.occasion || form.mood);
+
+  return (
+    <div className="screen fade-in" style={{ padding:'28px 20px 100px' }}>
+      {/* Brand header */}
+      <div style={{ marginBottom:32 }}>
+        <div style={{ fontSize:11, color:'#C0A898', fontWeight:700, letterSpacing:'0.18em', marginBottom:8 }}>STYLE AI</div>
+        <h1 style={{ fontSize:30, fontWeight:800, color:'#1C1C1C', lineHeight:1.25 }}>
+          今日、<br/>何を着る？
+        </h1>
+        <p style={{ fontSize:14, color:'#A09080', marginTop:10, lineHeight:1.6 }}>
+          気分とシーンを教えると<br/>あなたにぴったりなコーデを提案します
+        </p>
+      </div>
+
+      {/* シーン */}
+      <div style={{ marginBottom:24 }}>
+        <div className="section-label">シーン</div>
+        <div className="chip-row">
+          {OCCASIONS.map(o => <Chip key={o} label={o} selected={form.occasion===o} onClick={()=>toggle('occasion',o)} />)}
+        </div>
+      </div>
+
+      {/* 気分 */}
+      <div style={{ marginBottom:24 }}>
+        <div className="section-label">今日の気分</div>
+        <div className="chip-row">
+          {MOODS.map(m => <Chip key={m} label={m} selected={form.mood===m} onClick={()=>toggle('mood',m)} />)}
+        </div>
+      </div>
+
+      {/* 天気 */}
+      <div style={{ marginBottom:24 }}>
+        <div className="section-label">天気</div>
+        <div className="chip-row">
+          {WEATHERS.map(w => <Chip key={w} label={w} selected={form.weather===w} onClick={()=>toggle('weather',w)} />)}
+        </div>
+      </div>
+
+      {/* 誰と */}
+      <div style={{ marginBottom:24 }}>
+        <div className="section-label">誰と</div>
+        <div className="chip-row">
+          {COMPANIONS.map(c => <Chip key={c} label={c} selected={form.companion===c} onClick={()=>toggle('companion',c)} />)}
+        </div>
+      </div>
+
+      {/* フリー入力 */}
+      <div style={{ marginBottom:32 }}>
+        <div className="section-label">その他 （任意）</div>
+        <textarea
+          placeholder="「少し特別な感じにしたい」「予算は控えめで」「背が低め」など自由に..."
+          value={form.note}
+          onChange={e=>setForm(p=>({...p,note:e.target.value}))}
+          style={{
+            width:'100%', padding:'14px 16px',
+            border:'1.5px solid #DDD8D0', borderRadius:14, height:88,
+            fontSize:14, outline:'none', background:'white', color:'#1C1C1C', lineHeight:1.6
+          }}
+        />
+      </div>
+
+      <button className="btn-primary" onClick={()=>canSubmit&&onSubmit(form)} disabled={!canSubmit}>
+        コーデを提案してもらう →
+      </button>
+    </div>
+  );
+}
+
+/* SUGGESTION SCREEN */
+function SuggestionScreen({ formData, wardrobe, onChat }) {
+  const s = getSuggestion(formData);
+  const hasWardrobe = wardrobe.length > 0;
+  const wrdItems = s.items.filter(i=>i.wrd);
+
+  return (
+    <div className="screen fade-in" style={{ paddingBottom:120 }}>
+      {/* Dark hero header */}
+      <div style={{ background:'#1C1C1C', padding:'32px 20px 24px', color:'white' }}>
+        <div style={{ fontSize:11, color:'#666', letterSpacing:'0.18em', marginBottom:10 }}>STYLE AI</div>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
+          <span style={{ fontSize:36 }}>{s.icon}</span>
+          <div>
+            <div style={{ fontSize:11, color:'#A09090', marginBottom:3, letterSpacing:'0.05em' }}>あなたへのコーデ提案</div>
+            <div style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.02em' }}>{s.theme}</div>
+          </div>
+        </div>
+        {/* Tags */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {[formData.occasion, formData.mood, formData.weather, formData.companion].filter(Boolean).map((t,i)=>(
+            <span key={i} style={{ background:'rgba(255,255,255,0.1)', padding:'5px 11px', borderRadius:12, fontSize:12, color:'#CCC' }}>{t}</span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:'20px' }}>
+        {/* Overview text */}
+        <div style={{ background:'white', borderRadius:16, padding:'16px 18px', marginBottom:16, borderLeft:'3px solid #C9A96E', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+          <p style={{ fontSize:14, color:'#555', lineHeight:1.75, margin:0 }}>{s.overview}</p>
+        </div>
+
+        {/* Image grid — style representations */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'auto auto', gap:10, marginBottom:16 }}>
+          {/* Main large image */}
+          <div style={{
+            gridColumn:'1', gridRow:'1 / 3',
+            borderRadius:16, background: s.gradients[0],
+            aspectRatio:'2/3', display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', gap:6, position:'relative'
+          }}>
+            <span style={{ fontSize:52 }}>{s.icon}</span>
+            <span style={{
+              fontSize:11, background:'rgba(0,0,0,0.22)', color:'white',
+              padding:'4px 10px', borderRadius:10, backdropFilter:'blur(4px)'
+            }}>スタイルイメージ</span>
+          </div>
+          {/* AI illustration */}
+          <div style={{
+            borderRadius:16, background: s.gradients[1],
+            aspectRatio:'1/1', display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', gap:4
+          }}>
+            <span style={{ fontSize:30 }}>🎨</span>
+            <span style={{ fontSize:11, color:'#888' }}>AIイラスト</span>
+          </div>
+          {/* Reference photo */}
+          <div style={{
+            borderRadius:16, background: s.gradients[2],
+            aspectRatio:'1/1', display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', gap:4
+          }}>
+            <span style={{ fontSize:30 }}>📸</span>
+            <span style={{ fontSize:11, color:'#888' }}>参考画像</span>
+          </div>
+        </div>
+
+        {/* Wardrobe used items banner */}
+        {hasWardrobe && wrdItems.length > 0 && (
+          <div style={{
+            background:'#F0FAF2', border:'1px solid #C8E8D0',
+            borderRadius:14, padding:'12px 16px', marginBottom:14,
+            display:'flex', alignItems:'center', gap:10
+          }}>
+            <span style={{ fontSize:22 }}>✅</span>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:'#2E7D32', marginBottom:2 }}>あなたの服を活用中</div>
+              <div style={{ fontSize:12, color:'#4CAF50' }}>
+                {wrdItems.map(i=>i.label).join(' · ')} を使ったコーデです
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Item breakdown */}
+        <div style={{ marginBottom:16 }}>
+          <div className="section-label">コーディネートの内訳</div>
+          {s.items.map((item,i)=>(
+            <div key={i} className="card" style={{
+              display:'flex', alignItems:'flex-start', gap:13,
+              padding:'13px 15px', marginBottom:8
+            }}>
+              <div style={{
+                width:44, height:44, borderRadius:12,
+                background: s.gradients[i % s.gradients.length],
+                display:'flex', alignItems:'center', justifyContent:'center',
+                flexShrink:0, fontSize:22
+              }}>
+                {['👕','👖','👞','👜'][i%4]}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                  <span style={{ fontSize:15, fontWeight:700, color:'#1C1C1C' }}>{item.label}</span>
+                  {item.wrd && (
+                    <span style={{
+                      fontSize:10, background:'#E8F5E9', color:'#2E7D32',
+                      padding:'2px 8px', borderRadius:8, fontWeight:700
+                    }}>あなたの服</span>
+                  )}
+                </div>
+                <p style={{ fontSize:13, color:'#888', margin:0, lineHeight:1.55 }}>{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tip */}
+        <div style={{
+          background:'#FDF8F0', borderRadius:14, padding:'14px 16px',
+          marginBottom:16, border:'1px solid #F0E5D0'
+        }}>
+          <div style={{ fontSize:12, color:'#C9A96E', fontWeight:800, marginBottom:5, letterSpacing:'0.05em' }}>
+            💡 スタイリング Tips
+          </div>
+          <p style={{ fontSize:13, color:'#666', margin:0, lineHeight:1.7 }}>{s.tip}</p>
+        </div>
+
+        {/* Wardrobe promo if empty */}
+        {!hasWardrobe && (
+          <div style={{
+            background:'#F0F4FF', border:'1px solid #D8E0F8',
+            borderRadius:14, padding:'14px 16px', marginBottom:16
+          }}>
+            <div style={{ fontSize:12, color:'#5C6BC0', fontWeight:800, marginBottom:4 }}>
+              👗 ワードローブを登録すると
+            </div>
+            <p style={{ fontSize:13, color:'#666', margin:0, lineHeight:1.65 }}>
+              あなたの持っている服の中から優先してコーデを提案します。タブから登録してみましょう！
+            </p>
+          </div>
+        )}
+
+        <button className="btn-primary" onClick={onChat} style={{ marginBottom:10 }}>
+          💬 チャットで調整する
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* CHAT SCREEN */
+function ChatScreen({ formData }) {
+  const s = getSuggestion(formData);
+  const [messages, setMessages] = useState([{
+    role:'ai',
+    text:`「${s.theme}」のコーデはいかがでしたか？気になる点があれば、自由に話しかけてください。調整します！`
+  }]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+  const QUICK = ['もっとカジュアルに','色を変えて','別のスタイルに','シンプルに','暖かみがほしい'];
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:'smooth' });
+  }, [messages, loading]);
+
+  const send = (text) => {
+    if (!text.trim() || loading) return;
+    setMessages(p=>[...p,{role:'user',text}]);
+    setInput('');
+    setLoading(true);
+    setTimeout(()=>{
+      setMessages(p=>[...p,{role:'ai',text:getAIResponse(text)}]);
+      setLoading(false);
+    }, 1100 + Math.random()*400);
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh' }}>
+      {/* Header */}
+      <div style={{ background:'#1C1C1C', padding:'24px 20px 16px', color:'white', flexShrink:0 }}>
+        <div style={{ fontSize:11, color:'#666', letterSpacing:'0.18em', marginBottom:4 }}>STYLE AI</div>
+        <div style={{ fontSize:20, fontWeight:800 }}>コーデを調整する</div>
+        <div style={{ fontSize:12, color:'#A09090', marginTop:2 }}>{s.theme}</div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:'auto', padding:'16px 18px', background:'#F2EDE8' }}>
+        {messages.map((m,i)=>(
+          <div key={i} style={{
+            display:'flex', justifyContent: m.role==='user' ? 'flex-end' : 'flex-start',
+            marginBottom:14, alignItems:'flex-end', gap:8
+          }}>
+            {m.role==='ai' && (
+              <div style={{
+                width:34, height:34, borderRadius:10, background:'#1C1C1C',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:16, flexShrink:0, marginBottom:2
+              }}>✨</div>
+            )}
+            <div className="chat-bubble" style={{
+              maxWidth:'76%',
+              background: m.role==='ai' ? 'white' : '#1C1C1C',
+              color: m.role==='ai' ? '#1C1C1C' : 'white',
+              borderRadius: m.role==='ai' ? '18px 18px 18px 4px' : '18px 18px 4px 18px',
+              boxShadow:'0 1px 3px rgba(0,0,0,0.06)'
+            }}>
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display:'flex', alignItems:'flex-end', gap:8, marginBottom:14 }}>
+            <div style={{ width:34, height:34, borderRadius:10, background:'#1C1C1C', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>✨</div>
+            <div style={{ background:'white', borderRadius:'18px 18px 18px 4px', padding:'14px 18px', fontSize:14, color:'#AAA', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
+              考え中<span style={{ animation:'blink 1s step-start infinite' }}>…</span>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Quick replies */}
+      <div style={{ padding:'10px 18px 6px', background:'#F2EDE8', flexShrink:0 }}>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:2 }}>
+          {QUICK.map(q=>(
+            <button key={q} onClick={()=>send(q)} style={{
+              flexShrink:0, padding:'8px 14px', borderRadius:20,
+              border:'1.5px solid #D8D0C8', background:'white',
+              fontSize:13, cursor:'pointer', color:'#3A3A3A', fontFamily:'inherit'
+            }}>
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Input */}
+      <div style={{
+        padding:'10px 18px 30px', background:'white',
+        borderTop:'1px solid #EAE4DE', flexShrink:0,
+        paddingBottom: 'max(30px, env(safe-area-inset-bottom))'
+      }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <input
+            value={input}
+            onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&send(input)}
+            placeholder="メッセージを入力..."
+            style={{
+              flex:1, padding:'13px 18px',
+              border:'1.5px solid #DDD8D0', borderRadius:26,
+              fontSize:14, outline:'none', background:'#FAFAFA', color:'#1C1C1C'
+            }}
+          />
+          <button onClick={()=>send(input)} style={{
+            width:44, height:44, borderRadius:22, background:'#1C1C1C',
+            border:'none', cursor:'pointer', display:'flex', alignItems:'center',
+            justifyContent:'center', flexShrink:0, fontSize:19, color:'white'
+          }}>↑</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* WARDROBE SCREEN */
+function WardrobeScreen({ wardrobe, setWardrobe }) {
+  const [activeCategory, setActiveCategory] = useState('すべて');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newItem, setNewItem] = useState({ name:'', category:'トップス', note:'' });
+
+  const filtered = activeCategory==='すべて' ? wardrobe : wardrobe.filter(i=>i.category===activeCategory);
+
+  const addItem = () => {
+    if (!newItem.name.trim()) return;
+    const idx = wardrobe.length;
+    setWardrobe(p=>[...p,{
+      ...newItem,
+      id: Date.now(),
+      emoji: CAT_EMOJI[newItem.category] || '👕',
+      color: COLORS[idx % COLORS.length]
+    }]);
+    setNewItem({ name:'', category:'トップス', note:'' });
+    setShowAdd(false);
+  };
+
+  return (
+    <div className="screen fade-in" style={{ paddingBottom:120 }}>
+      {/* Header */}
+      <div style={{ background:'#1C1C1C', padding:'32px 20px 20px', color:'white' }}>
+        <div style={{ fontSize:11, color:'#666', letterSpacing:'0.18em', marginBottom:6 }}>STYLE AI</div>
+        <div style={{ fontSize:22, fontWeight:800 }}>マイワードローブ</div>
+        <div style={{ fontSize:13, color:'#A09090', marginTop:4 }}>{wardrobe.length}点のアイテム登録済み</div>
+      </div>
+
+      {/* Category tabs */}
+      <div style={{ background:'white', borderBottom:'1px solid #EAE4DE' }}>
+        <div style={{ display:'flex', overflowX:'auto', padding:'0 20px' }}>
+          {CATEGORIES.map(cat=>(
+            <button key={cat} className={`cat-tab${activeCategory===cat?' active':''}`} onClick={()=>setActiveCategory(cat)}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:'18px 18px' }}>
+        {/* Grid */}
+        {filtered.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'52px 0', color:'#B0A898' }}>
+            <div style={{ fontSize:48, marginBottom:12 }}>🧺</div>
+            <div style={{ fontSize:15, marginBottom:6, color:'#888' }}>アイテムがありません</div>
+            <div style={{ fontSize:13, color:'#BBB' }}>下のボタンから追加してみましょう</div>
+          </div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
+            {filtered.map(item=>(
+              <div key={item.id} className="wardrobe-item">
+                <div style={{
+                  height:130, background:item.color,
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:50
+                }}>
+                  {item.emoji}
+                </div>
+                <div style={{ padding:'11px 13px' }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#1C1C1C' }}>{item.name}</div>
+                  <div style={{ fontSize:12, color:'#AAA', marginTop:2 }}>
+                    {item.category}{item.note ? ` · ${item.note}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button className="btn-primary" onClick={()=>setShowAdd(true)}>
+          ＋ アイテムを追加する
+        </button>
+      </div>
+
+      {/* Add Item Modal */}
+      {showAdd && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.48)', zIndex:200,
+          display:'flex', alignItems:'flex-end', justifyContent:'center'
+        }} onClick={e=>{if(e.target===e.currentTarget)setShowAdd(false)}}>
+          <div className="slide-up" style={{
+            background:'white', borderRadius:'24px 24px 0 0',
+            padding:'24px 20px 40px', width:'100%', maxWidth:430
+          }}>
+            <div style={{ width:36, height:4, background:'#E0D8D0', borderRadius:2, margin:'0 auto 22px' }} />
+            <div style={{ fontSize:18, fontWeight:800, marginBottom:22, color:'#1C1C1C' }}>アイテムを追加</div>
+
+            <div style={{ marginBottom:18 }}>
+              <div className="section-label">アイテム名 *</div>
+              <input
+                placeholder="例：白シャツ、デニムパンツ、ベージュコート..."
+                value={newItem.name}
+                onChange={e=>setNewItem(p=>({...p,name:e.target.value}))}
+                style={{
+                  width:'100%', padding:'13px 15px',
+                  border:'1.5px solid #DDD8D0', borderRadius:12,
+                  fontSize:14, outline:'none', color:'#1C1C1C'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom:18 }}>
+              <div className="section-label">カテゴリ</div>
+              <div className="chip-row">
+                {['トップス','ボトムス','アウター','シューズ','バッグ','アクセサリー'].map(c=>(
+                  <Chip key={c} label={c} selected={newItem.category===c} onClick={()=>setNewItem(p=>({...p,category:c}))} />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom:26 }}>
+              <div className="section-label">メモ（色・素材・特徴など）</div>
+              <input
+                placeholder="例：ネイビー、本革、Lサイズ..."
+                value={newItem.note}
+                onChange={e=>setNewItem(p=>({...p,note:e.target.value}))}
+                style={{
+                  width:'100%', padding:'13px 15px',
+                  border:'1.5px solid #DDD8D0', borderRadius:12,
+                  fontSize:14, outline:'none', color:'#1C1C1C'
+                }}
+              />
+            </div>
+
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={()=>setShowAdd(false)} style={{
+                flex:1, padding:'14px', borderRadius:12,
+                border:'1.5px solid #DDD8D0', background:'white',
+                fontSize:15, cursor:'pointer', color:'#888', fontFamily:'inherit'
+              }}>キャンセル</button>
+              <button className="btn-primary" onClick={addItem} style={{ flex:2, borderRadius:12, padding:'14px' }}>
+                追加する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* SCROLL BUTTONS */
+function ScrollButtons({ screen }) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShow(document.documentElement.scrollTop > 60 || document.body.scrollTop > 60);
+    };
+    window.addEventListener('scroll', onScroll);
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // チャット画面ではスクロールボタンを非表示（独自のスクロール領域があるため）
+  if (screen === 'chat') return null;
+
+  const scrollUp = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollDown = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+  return (
+    <div className="scroll-btn-wrap" style={{ opacity: show ? 1 : 0.4, transition: 'opacity 0.2s' }}>
+      <button className="scroll-btn" onClick={scrollUp} title="上へ">↑</button>
+      <button className="scroll-btn" onClick={scrollDown} title="下へ">↓</button>
+    </div>
+  );
+}
+
+/* BOTTOM NAV */
+function BottomNav({ screen, setScreen, hasSuggestion }) {
+  const tabs = [
+    { id:'home',       icon:'🏠', label:'ホーム'     },
+    { id:'suggestion', icon:'✨', label:'コーデ提案'  },
+    { id:'chat',       icon:'💬', label:'チャット'    },
+    { id:'wardrobe',   icon:'👗', label:'ワードローブ' },
+  ];
+  return (
+    <div className="bottom-nav">
+      {tabs.map(t=>(
+        <button
+          key={t.id}
+          className={`nav-item${screen===t.id?' active':''}`}
+          onClick={()=>setScreen(t.id)}
+        >
+          <span className="nav-icon">{t.icon}</span>
+          <span style={{ fontSize:10, lineHeight:1 }}>{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* MAIN APP */
+function App() {
+  const [screen, setScreen]   = useState('home');
+  const [formData, setFormData] = useState({ occasion:'カジュアル 👟', mood:'シンプルに 🤍' });
+  const [wardrobe, setWardrobe] = useState(DEMO_WARDROBE);
+
+  const handleSubmit = (data) => {
+    setFormData(data);
+    setScreen('suggestion');
+  };
+
+  return (
+    <div>
+      {screen==='home'       && <HomeScreen onSubmit={handleSubmit} />}
+      {screen==='suggestion' && <SuggestionScreen formData={formData} wardrobe={wardrobe} onChat={()=>setScreen('chat')} />}
+      {screen==='chat'       && <ChatScreen formData={formData} />}
+      {screen==='wardrobe'   && <WardrobeScreen wardrobe={wardrobe} setWardrobe={setWardrobe} />}
+      <ScrollButtons screen={screen} />
+      <BottomNav screen={screen} setScreen={setScreen} />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
