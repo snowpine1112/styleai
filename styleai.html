@@ -196,6 +196,33 @@
 <script type="text/babel">
 const { useState, useRef, useEffect } = React;
 
+/* ─── IMAGE UTILS ─── */
+
+const compressImage = (file, maxSize = 600) => new Promise((resolve) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
+      else        { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+const loadWardrobe = () => {
+  try { return JSON.parse(localStorage.getItem('styleai_wardrobe') || 'null'); } catch { return null; }
+};
+const saveWardrobe = (items) => {
+  try { localStorage.setItem('styleai_wardrobe', JSON.stringify(items)); } catch {}
+};
+
 /* ─── DATA ─── */
 
 const OCCASIONS = ['デート 💕','仕事 💼','カジュアル 👟','フォーマル 🥂','お出かけ 🌸','スポーツ ⚡'];
@@ -416,6 +443,18 @@ function SuggestionScreen({ formData, wardrobe, onChat }) {
   const hasWardrobe = wardrobe.length > 0;
   const wrdItems = s.items.filter(i=>i.wrd);
 
+  // ワードローブから名前が部分一致する写真付きアイテムを探す
+  const findWardrobePhoto = (label) => {
+    const found = wardrobe.find(w => w.photo && (
+      label.includes(w.name) || w.name.includes(label) ||
+      label.replace(/\s/g,'').includes(w.name.replace(/\s/g,''))
+    ));
+    return found ? found.photo : null;
+  };
+
+  // 写真付きワードローブアイテム一覧（コーデ提案用）
+  const photoItems = wardrobe.filter(w => w.photo);
+
   return (
     <div className="screen fade-in" style={{ paddingBottom:120 }}>
       {/* Dark hero header */}
@@ -525,26 +564,60 @@ function SuggestionScreen({ formData, wardrobe, onChat }) {
           </div>
         )}
 
+        {/* Photo wardrobe banner */}
+        {photoItems.length > 0 && (
+          <div style={{ marginBottom:16 }}>
+            <div className="section-label">あなたの服からコーデ</div>
+            <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
+              {photoItems.map(item=>(
+                <div key={item.id} style={{ flexShrink:0, textAlign:'center' }}>
+                  <div style={{
+                    width:72, height:72, borderRadius:12, overflow:'hidden',
+                    border:'2px solid #E8E0D8', background:'#F5F0EA'
+                  }}>
+                    <img src={item.photo} alt={item.name}
+                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  </div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:4, maxWidth:72, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {item.name}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Item breakdown */}
         <div style={{ marginBottom:16 }}>
           <div className="section-label">コーディネートの内訳</div>
-          {s.items.map((item,i)=>(
+          {s.items.map((item,i)=>{
+            const wPhoto = findWardrobePhoto(item.label);
+            return (
             <div key={i} className="card" style={{
               display:'flex', alignItems:'flex-start', gap:13,
               padding:'13px 15px', marginBottom:8
             }}>
               <div style={{
-                width:44, height:44, borderRadius:12,
+                width:52, height:52, borderRadius:12,
                 background: s.gradients[i % s.gradients.length],
                 display:'flex', alignItems:'center', justifyContent:'center',
-                flexShrink:0, fontSize:22
+                flexShrink:0, fontSize:22, overflow:'hidden'
               }}>
-                {['👕','👖','👞','👜'][i%4]}
+                {wPhoto
+                  ? <img src={wPhoto} alt={item.label} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  : ['👕','👖','👞','👜'][i%4]
+                }
               </div>
               <div style={{ flex:1 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
                   <span style={{ fontSize:15, fontWeight:700, color:'#1C1C1C' }}>{item.label}</span>
-                  {item.wrd && (
+                  {wPhoto && (
+                    <span style={{
+                      fontSize:10, background:'#E8F5E9', color:'#2E7D32',
+                      padding:'2px 8px', borderRadius:8, fontWeight:700
+                    }}>📷 あなたの服</span>
+                  )}
+                  {item.wrd && !wPhoto && (
                     <span style={{
                       fontSize:10, background:'#E8F5E9', color:'#2E7D32',
                       padding:'2px 8px', borderRadius:8, fontWeight:700
@@ -554,7 +627,8 @@ function SuggestionScreen({ formData, wardrobe, onChat }) {
                 <p style={{ fontSize:13, color:'#888', margin:0, lineHeight:1.55 }}>{item.desc}</p>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Tip */}
@@ -711,9 +785,22 @@ function ChatScreen({ formData }) {
 function WardrobeScreen({ wardrobe, setWardrobe }) {
   const [activeCategory, setActiveCategory] = useState('すべて');
   const [showAdd, setShowAdd] = useState(false);
-  const [newItem, setNewItem] = useState({ name:'', category:'トップス', note:'' });
+  const [newItem, setNewItem] = useState({ name:'', category:'トップス', note:'', photo:null });
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const filtered = activeCategory==='すべて' ? wardrobe : wardrobe.filter(i=>i.category===activeCategory);
+
+  const handlePhotoSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const compressed = await compressImage(file);
+    setPhotoPreview(compressed);
+    setNewItem(p => ({ ...p, photo: compressed }));
+    setUploading(false);
+  };
 
   const addItem = () => {
     if (!newItem.name.trim()) return;
@@ -724,8 +811,13 @@ function WardrobeScreen({ wardrobe, setWardrobe }) {
       emoji: CAT_EMOJI[newItem.category] || '👕',
       color: COLORS[idx % COLORS.length]
     }]);
-    setNewItem({ name:'', category:'トップス', note:'' });
+    setNewItem({ name:'', category:'トップス', note:'', photo:null });
+    setPhotoPreview(null);
     setShowAdd(false);
+  };
+
+  const removeItem = (id) => {
+    setWardrobe(p => p.filter(i => i.id !== id));
   };
 
   return (
@@ -759,13 +851,24 @@ function WardrobeScreen({ wardrobe, setWardrobe }) {
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
             {filtered.map(item=>(
-              <div key={item.id} className="wardrobe-item">
+              <div key={item.id} className="wardrobe-item" style={{ position:'relative' }}>
                 <div style={{
-                  height:130, background:item.color,
+                  height:150, background:item.color, overflow:'hidden',
                   display:'flex', alignItems:'center', justifyContent:'center', fontSize:50
                 }}>
-                  {item.emoji}
+                  {item.photo
+                    ? <img src={item.photo} alt={item.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    : item.emoji
+                  }
                 </div>
+                <button onClick={()=>removeItem(item.id)} style={{
+                  position:'absolute', top:7, right:7,
+                  width:26, height:26, borderRadius:13,
+                  background:'rgba(0,0,0,0.45)', border:'none',
+                  color:'white', fontSize:14, cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  lineHeight:1
+                }}>×</button>
                 <div style={{ padding:'11px 13px' }}>
                   <div style={{ fontSize:14, fontWeight:700, color:'#1C1C1C' }}>{item.name}</div>
                   <div style={{ fontSize:12, color:'#AAA', marginTop:2 }}>
@@ -794,6 +897,47 @@ function WardrobeScreen({ wardrobe, setWardrobe }) {
           }}>
             <div style={{ width:36, height:4, background:'#E0D8D0', borderRadius:2, margin:'0 auto 22px' }} />
             <div style={{ fontSize:18, fontWeight:800, marginBottom:22, color:'#1C1C1C' }}>アイテムを追加</div>
+
+            {/* Photo upload */}
+            <div style={{ marginBottom:18 }}>
+              <div className="section-label">写真（任意）</div>
+              <input type="file" accept="image/*" ref={fileInputRef}
+                style={{ display:'none' }} onChange={handlePhotoSelect} />
+              <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+                <div
+                  onClick={()=>fileInputRef.current.click()}
+                  style={{
+                    width:90, height:90, borderRadius:14, overflow:'hidden',
+                    border:'2px dashed #DDD8D0', background:'#FAFAFA',
+                    display:'flex', flexDirection:'column',
+                    alignItems:'center', justifyContent:'center',
+                    cursor:'pointer', flexShrink:0, position:'relative'
+                  }}
+                >
+                  {uploading ? (
+                    <span style={{ fontSize:12, color:'#AAA' }}>処理中…</span>
+                  ) : photoPreview ? (
+                    <img src={photoPreview} alt="preview"
+                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  ) : (
+                    <>
+                      <span style={{ fontSize:28 }}>📷</span>
+                      <span style={{ fontSize:11, color:'#BBB', marginTop:4 }}>タップして追加</span>
+                    </>
+                  )}
+                </div>
+                <div style={{ fontSize:13, color:'#888', lineHeight:1.65 }}>
+                  服の写真を撮影 or ライブラリから選択。<br/>
+                  写真があると実際の服でコーデ提案できます。
+                  {photoPreview && (
+                    <button onClick={()=>{ setPhotoPreview(null); setNewItem(p=>({...p,photo:null})); }}
+                      style={{ display:'block', marginTop:6, fontSize:12, color:'#E57373', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                      写真を削除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <div style={{ marginBottom:18 }}>
               <div className="section-label">アイテム名 *</div>
@@ -904,7 +1048,15 @@ function BottomNav({ screen, setScreen, hasSuggestion }) {
 function App() {
   const [screen, setScreen]   = useState('home');
   const [formData, setFormData] = useState({ occasion:'カジュアル 👟', mood:'シンプルに 🤍' });
-  const [wardrobe, setWardrobe] = useState(DEMO_WARDROBE);
+  const [wardrobe, setWardrobe] = useState(() => loadWardrobe() || DEMO_WARDROBE);
+
+  const updateWardrobe = (updater) => {
+    setWardrobe(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveWardrobe(next);
+      return next;
+    });
+  };
 
   const handleSubmit = (data) => {
     setFormData(data);
@@ -916,7 +1068,7 @@ function App() {
       {screen==='home'       && <HomeScreen onSubmit={handleSubmit} />}
       {screen==='suggestion' && <SuggestionScreen formData={formData} wardrobe={wardrobe} onChat={()=>setScreen('chat')} />}
       {screen==='chat'       && <ChatScreen formData={formData} />}
-      {screen==='wardrobe'   && <WardrobeScreen wardrobe={wardrobe} setWardrobe={setWardrobe} />}
+      {screen==='wardrobe'   && <WardrobeScreen wardrobe={wardrobe} setWardrobe={updateWardrobe} />}
       <ScrollButtons screen={screen} />
       <BottomNav screen={screen} setScreen={setScreen} />
     </div>
